@@ -71,13 +71,25 @@ Roudaia_data <- Roudaia_data %>%
     numTargets = as.integer(sub("^0*", "", sub(".*t(\\d+).*", "\\1", targetsString))),
     objPerRing = as.integer(sub("^0*", "", sub(".*d(\\d+).*", "\\1", objsString)))
   )
+Roudaia_data$cond<- NULL
 Roudaia_data$targetsString<- NULL
-Roudaia_data$objPerRing<- NULL
+Roudaia_data$objsString<- NULL
+
 #Validate the ChatGPT data
 #table(Roudaia_data$cond,Roudaia_data$numTargets)
 #table(Roudaia_data$cond,Roudaia_data$objPerRing)
 
-
-
 # responseRing is the ring that was probed for the response. 1 = inner, 2 = middle 3 = outer,
-  
+# Response ring strangely has many more outer, then inner, then middle
+tab <- table(Roudaia_data$subj, Roudaia_data$responseRing)
+# Convert counts to row-wise percentages, for each subject
+#tab_pct <- prop.table(tab, margin = 1) * 100
+#print( round(tab_pct,0) )
+ring_response_percent <- Roudaia_data %>%
+  count(responseRing) %>%
+  mutate(percent = 100 * n / sum(n))
+print(ring_response_percent) #28%, 11%, 61%
+
+Roudaia_data <- Roudaia_data %>%
+  mutate(ageGroup = if_else(group == 1, "younger", "older"))
+Roudaia_data$group<-NULL
