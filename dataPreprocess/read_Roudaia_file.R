@@ -93,3 +93,24 @@ print(ring_response_percent) #28%, 11%, 61%
 Roudaia_data <- Roudaia_data %>%
   mutate(ageGroup = if_else(group == 1, "younger", "older"))
 Roudaia_data$group<-NULL
+
+#Plot data for each participant
+gg<- ggplot(Roudaia_data, #data_one_condition, 
+            aes(x=speed,y=correct,linetype=factor(objPerRing),
+                color=factor(numTargets))) +
+  stat_summary(fun=mean,geom="point") +
+  stat_summary(fun=mean,geom="smooth")  +
+  facet_wrap(subj~.) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Roudaia raw data") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/objPerRing),
+                      colour = "purple", alpha=0.2 )
+show(gg)
+
+#Fit psychometric curves, but do that in a separate file
+
