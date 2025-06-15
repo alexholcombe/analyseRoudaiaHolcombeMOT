@@ -65,7 +65,7 @@ Roudaia_data <- Roudaia_data %>%
   separate(cond, into = c("targetsString", "objsString"), sep = "\\.", remove = FALSE) %>%
   mutate(
     numTargets = as.integer(sub("^0*", "", sub(".*t(\\d+).*", "\\1", targetsString))),
-    objPerRing = as.integer(sub("^0*", "", sub(".*d(\\d+).*", "\\1", objsString)))
+    numObjects = as.integer(sub("^0*", "", sub(".*d(\\d+).*", "\\1", objsString)))
   )
 Roudaia_data$cond<- NULL
 Roudaia_data$targetsString<- NULL
@@ -73,7 +73,7 @@ Roudaia_data$objsString<- NULL
 
 #Validate the ChatGPT data
 #table(Roudaia_data$cond,Roudaia_data$numTargets)
-#table(Roudaia_data$cond,Roudaia_data$objPerRing)
+#table(Roudaia_data$cond,Roudaia_data$numObjects)
 
 # responseRing is the ring that was probed for the response. 1 = inner, 2 = middle 3 = outer,
 # Response ring strangely has many more outer, then inner, then middle
@@ -90,9 +90,22 @@ Roudaia_data <- Roudaia_data %>%
   mutate(ageGroup = if_else(group == 1, "younger", "older"))
 Roudaia_data$group<-NULL
 
+#Code gender in same way as Holcombe, with male and female
+Roudaia_data<- Roudaia_data |> mutate(gender = case_when(
+  gender == "M" ~ "male",
+  gender == "F" ~ "female",
+  TRUE ~ gender))
+#Code ageGroup in same way as Holcombe
+Roudaia_data <- Roudaia_data |>
+  mutate(ageGroup = case_when(
+    ageGroup == "Old" ~ "older",
+    ageGroup == "Young" ~ "younger",
+    TRUE ~ ageGroup
+  ))
+
 #Plot data for each participant
 gg<- ggplot(Roudaia_data, #data_one_condition, 
-            aes(x=speed,y=correct,linetype=factor(objPerRing),
+            aes(x=speed,y=correct,linetype=factor(numObjects),
                 color=factor(numTargets))) +
   stat_summary(fun=mean,geom="point") +
   stat_summary(fun=mean,geom="smooth")  +
@@ -104,7 +117,7 @@ gg<- ggplot(Roudaia_data, #data_one_condition,
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
 
 #Show floor with lines
-gg<- gg + geom_hline( aes(yintercept = 1/objPerRing),
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
                       colour = "purple", alpha=0.2 )
 show(gg)
 

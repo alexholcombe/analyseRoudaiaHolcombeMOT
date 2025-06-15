@@ -42,22 +42,14 @@ if (!file.exists(Roudaia_data_deidentified_file)) {
   stop("Was looking for this directory but doesn't exist:",Roudaia_data_deidentified_file)
 }
 
-Roudaia_data <- readr::read_tsv(Roudaia_data_deidentified_file) #skip incorrect header
-#Code gender in same way as Holcombe, with male and female
-Roudaia_data<- Roudaia_data |> mutate(gender = case_when(
-    gender == "M" ~ "male",
-    gender == "F" ~ "female",
-    TRUE ~ gender))
-#Code ageGroup in same way as Holcombe
-Roudaia_data <- Roudaia_data %>%
-  mutate(ageGroup = case_when(
-    ageGroup == "Old" ~ "older",
-    ageGroup == "Young" ~ "younger",
-    TRUE ~ ageGroup
-  ))
+Roudaia_data <- readr::read_tsv(Roudaia_data_deidentified_file) 
+
+numSs<- length(table(Roudaia_data$subj)) #36
+
+
 ```
 
-Read Holcombe data from github
+Read Holcombe data from github.
 
 ```{r}
 #| echo: false
@@ -108,29 +100,29 @@ HolcombeFilesGuide<- myTryCatch(
 ####################
 #Get age and sex info - an anonymised copy of the Sharepoint participant sheet with many columns 
 #  redacted that was created by loadAnonymiseSaveData.R
-HolcombeAgeGenderFile<- "participantInfo_reducedForPrivacy.tsv"
-HolcombeAgeGenderURL<- paste0(HolcombeRepoRaw,HolcombeDataDir,"/",HolcombeAgeGenderFile)
-HolcombeAgeGender<- myTryCatch( 
-      readr::read_tsv(HolcombeAgeGenderURL) 
+HolcAgeGenderAcuityCrowdingFile<- "participantInfo_reducedForPrivacy.tsv"
+HolcAgeGenderAcuityCrowdingURL<- paste0(HolcombeRepoRaw,HolcombeDataDir,"/",HolcAgeGenderAcuityCrowdingFile)
+HolcAgeGenderAcuityCrowding<- myTryCatch( 
+      readr::read_tsv(HolcAgeGenderAcuityCrowdingURL) 
     )
-if (!is.null(HolcombeAgeGender$warning)) {
-  print("Warnings reading HolcombeAgeGender data:")
-  print(HolcombeAgeGender$warning)
+if (!is.null(HolcAgeGenderAcuityCrowding$warning)) {
+  print("Warnings reading HolcAgeGenderAcuityCrowding data:")
+  print(HolcAgeGenderAcuityCrowding$warning)
 }
-if (!is.null(HolcombeAgeGender$error)) {
-  print("Error reading HolcombeAgeGender data:")
-  print(HolcombeAgeGender$error)
+if (!is.null(HolcAgeGenderAcuityCrowding$error)) {
+  print("Error reading HolcAgeGenderAcuityCrowding data:")
+  print(HolcAgeGenderAcuityCrowding$error)
 }
-HolcombeAgeGender<- HolcombeAgeGender$value
+HolcAgeGenderAcuityCrowding<- HolcAgeGenderAcuityCrowding$value
 
 #Classify age
-HolcombeAgeGender<- HolcombeAgeGender |> 
+HolcAgeGenderAcuityCrowding<- HolcAgeGenderAcuityCrowding |> 
             mutate(ageGroup = if_else(agePerturbed>60, "older", "younger"))
 
 ```
 
 Plot age distros of Roudaia and Holcombe on same plot.
-They look similar except Holcombe has a lot more young participants, in particular young females.
+They look similar except Holcombe has a lot more young participants, in particular especially-young females.
 
 ```{r}
 #| echo: false
@@ -139,7 +131,7 @@ RoudaiaAgeGender<- Roudaia_data |> group_by(subj, gender) |> slice(1) |>
               select(subj,age,gender,ageGroup) |> mutate(lab="Roudaia")
 
 ageGenderBothLabs<- rbind( RoudaiaAgeGender, 
-              HolcombeAgeGender |> select(agePerturbed,gender,ageGroup) |> 
+              HolcAgeGenderAcuityCrowding |> select(agePerturbed,gender,ageGroup) |> 
                                     rename(age = agePerturbed) |>
                                     mutate(lab="Holcombe")
   )
@@ -157,103 +149,212 @@ ggplot(ageGenderBothLabs, aes(x = age, fill = gender)) +
   theme_bw()
 ```
 
+Join age and sex to behavioural data, as well as acuity and crowding measures
 
-###Join age and sex to behavioural data
-ageGender<- pInfoReducedForPrivacy |> select(IDnum,gender,age,agePerturbed)
-#ALSO ADD ACUITY AND CROWDING for exploratory analyses
-rawData<- rawData |> left_join(ageGender, by = join_by(IDnum))
+```{r}
+#| echo: false
+#| 
+Holcombe_data<- Holcombe_data |> left_join(HolcAgeGenderAcuityCrowding, by = join_by(IDnum))
+
+#For readability, move some columns to before all the acuity and crowding stuff
+Holcombe_data <- Holcombe_data %>%
+  relocate(agePerturbed, ageGroup, orderCorrect, .after = IDnum)
+
+Holcombe_data$basicShape<- NULL
+
+#To be same as Roudaia, rename IDnum subj and orderCorrect
+Holcombe_data<- Holcombe_data |> rename(subj = IDnum)
+Holcombe_data<- Holcombe_data |> mutate(correct = (orderCorrect==3))
+Holcombe_data$correct<- as.numeric(Holcombe_data$correct)
+
+#Add a genderSymbol useful for plotting annotation
+Roudaia_data <- Roudaia_data %>%
+  mutate(genderSymbol = if_else(gender == "M", "\u2642", "\u2640"))
+Holcombe_data <- Holcombe_data %>%
+  mutate(genderSymbol = if_else(gender == "M", "\u2642", "\u2640"))
 
 ```
 
+## Exclusions for not reaching decent performance
 
-###################################################
-############Exclusion criteria########################
-#################################################
+
+Roudaia: "The zip contains all 36 subjects included in the paper." So this seems to mean that it includes the excluded participants mentioned next
+
+Roudaia: "In nine cases, two older male participants and five older female participants showed poor performance at the slowest speeds and the fit of the logistic curve was inadequate, with the threshold estimated to be below zero. This occurred for two thresholds in the three targets and five dots/ring condition, one threshold from the two targets and 10 dots/ring condition, and six thresholds on the three targets and 10 dots/ring condition. These nine thresholds were coded as missing data in the linear mixed-effects model analyses and were not included in the summary statistics shown in the figures."
+But I can see from inspecting her plots that at least in the 3 targets condition, at least four participants didn't exceed 50%. But Roudaia didn't say whether those participants were thrown out for creation of the data she sent me.
+
+Plot Holcombe data, looking for participants who didn't reach 75% at slow speeds.
 excludeDidntReach75pct = TRUE
 
+Plot young participants
+```{r}
+#| echo: false
 
-
-
-#Define function for when need to catch warnings and errors, https://stackoverflow.com/questions/4948361/how-do-i-save-warnings-and-errors-as-output-from-a-function
-myTryCatch <- function(expr) { 
-  warn <- err <- NULL
-  value <- withCallingHandlers(
-    tryCatch(expr, error=function(e) {
-      err <<- e
-      NULL
-    }), warning=function(w) {
-      warn <<- w
-      invokeRestart("muffleWarning")
-    })
-  list(value=value, warning=warn, error=err)
-}
-
-
-
-dfWithWarnings<- myTryCatch( 
-    readr::read_csv(Roudaia_data_file_with_path, show_col_types=TRUE) 
-  )
-if (!is.null(dfWithWarnings$warning)) {
-  print("Warnings reading Roudaia data:")
-  print(dfWithWarnings$warning)
-}
-if (!is.null(dfWithWarnings$error)) {
-  print("Error reading Roudaia data:")
-  print(dfWithWarnings$error)
-}
-Roudaia_data<- dfWithWarnings$value
-numSs<- length(table(Roudaia_data$subj)) #36
-
-#"cond has pretty self explanatory condition names:
-#  t1.d05 == 1 targe`t, 5 objects per ring. t2.d10: 2 targets, 10 objects per ring."
-
-Roudaia_data <- Roudaia_data %>%
-  separate(cond, into = c("targetsString", "objsString"), sep = "\\.", remove = FALSE) %>%
-  mutate(
-    numTargets = as.integer(sub("^0*", "", sub(".*t(\\d+).*", "\\1", targetsString))),
-    objPerRing = as.integer(sub("^0*", "", sub(".*d(\\d+).*", "\\1", objsString)))
-  )
-Roudaia_data$cond<- NULL
-Roudaia_data$targetsString<- NULL
-Roudaia_data$objsString<- NULL
-
-#Validate the ChatGPT data
-#table(Roudaia_data$cond,Roudaia_data$numTargets)
-#table(Roudaia_data$cond,Roudaia_data$objPerRing)
-
-# responseRing is the ring that was probed for the response. 1 = inner, 2 = middle 3 = outer,
-# Response ring strangely has many more outer, then inner, then middle
-tab <- table(Roudaia_data$subj, Roudaia_data$responseRing)
-# Convert counts to row-wise percentages, for each subject
-#tab_pct <- prop.table(tab, margin = 1) * 100
-#print( round(tab_pct,0) )
-ring_response_percent <- Roudaia_data %>%
-  count(responseRing) %>%
-  mutate(percent = 100 * n / sum(n))
-print(ring_response_percent) #28%, 11%, 61%
-
-Roudaia_data <- Roudaia_data %>%
-  mutate(ageGroup = if_else(group == 1, "younger", "older"))
-Roudaia_data$group<-NULL
-
-#Plot data for each participant
-gg<- ggplot(Roudaia_data, #data_one_condition, 
-            aes(x=speed,y=correct,linetype=factor(objPerRing),
-                color=factor(numTargets))) +
+#Plot young participants
+gg<- ggplot(Holcombe_data |> filter(ageGroup=="younger"),
+            aes(x=speed,y=correct,linetype=factor(numObjects),
+                color=factor(numTargets) )) +
   stat_summary(fun=mean,geom="point") +
   stat_summary(fun=mean,geom="smooth")  +
   facet_wrap(subj~.) +
   labs(x = "Speed (revolutions per second)",
        y = "Correct",
-       title = "Roudaia raw data") +
+       title = "Holcombe younger") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
 
 #Show floor with lines
-gg<- gg + geom_hline( aes(yintercept = 1/objPerRing),
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
                       colour = "purple", alpha=0.2 )
 show(gg)
+```
+Plot old participants
+```{r}
+#| echo: false
 
-destination_fname<- "Roudaia_preprocessed.tsv"
-destination<- here("dataPreprocess",destination_fname)
-readr::write_tsv(Roudaia_data, file = destination)
+#Plot young participants
+gg<- ggplot(Holcombe_data |> filter(ageGroup=="older"),
+            aes(x=speed,y=correct,linetype=factor(numObjects),
+                color=factor(numTargets) )) +
+  stat_summary(fun=mean,geom="point") +
+  stat_summary(fun=mean,geom="smooth")  +
+  facet_wrap(subj~.) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Holcombe older") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
+                      colour = "purple", alpha=0.2 )
+show(gg)
+```
+
+Zoom in on slow speeds so can see better how many should be excluded.
+In addition to the staircase, the Holcombe program periodically threw in a slow speed (.02 rps).
+How low did Roudaia speeds go?
+
+Looking at speeds tested by Roudaia, 
+
+```{r}
+#| echo: false
+
+head(table( round(Roudaia_data$speed,4) ), 25)
+```
+you can see that 0.05rps was tested a lot, other than that the only lower ones were 0.02 and 0.03, which were tested only 3 times! Why would that be?
+
+All the Holcombe young participants did great at the slowest speed!
+
+```{r}
+#| echo: false
+
+#Plot young participants
+gg<- ggplot(Holcombe_data |> filter(ageGroup=="younger", speed < 0.3) ,
+            aes(x=speed,y=correct,linetype=factor(numObjects),
+                color=factor(numTargets) )) +
+  stat_summary(fun=mean,geom="point") +
+  stat_summary(fun=mean,geom="smooth")  +
+  facet_wrap(subj~.) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Holcombe younger") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
+                      colour = "purple", alpha=0.2 )
+show(gg)
+```
+Zoom in on slow speeds so can see better how many should be excluded.
+In addition to the staircase, the Holcombe program periodically threw in a slow speed (.02 rps)
+
+All the Roudaia young participants did ok at the slowest speed. Some were barely at 75% but hard to tell because staircase didn't give consistent speeds, estimation is better.
+
+```{r}
+#| echo: false
+
+#Plot young participants
+gg<- ggplot(Roudaia_data |> filter(ageGroup=="younger", speed < 1.4) ,
+            aes(x=speed,y=correct,linetype=factor(numObjects),
+                color=factor(numTargets) )) +
+  stat_summary(fun = mean, geom = "point", position = position_jitter(width = 0.02)) +
+  #stat_summary(fun=mean,geom="smooth")  +
+  facet_wrap(subj~.) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Roudaia younger") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
+                      colour = "purple", alpha=0.2 )
+show(gg)
+```
+
+Check older participants slowest speeds.
+All Holcombe older participants did well at slowest speed! Although some did so badly at slightly-faster speeds that I have to think they can't track, only remember a few locations.
+```{r}
+#| echo: false
+
+gg<- ggplot(Holcombe_data |> filter(ageGroup=="older", speed < 0.3) ,
+            aes(x=speed,y=correct,linetype=factor(numObjects),
+                color=factor(numTargets) )) +
+  stat_summary(fun=mean,geom="point") +
+  stat_summary(fun=mean,geom="smooth")  +
+  facet_wrap(subj~.) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Holcombe older") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank()) #remove gridlines
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
+                      colour = "purple", alpha=0.2 )
+show(gg)
+```
+
+For Roudaia older, see below, these participants don't get to 75% in 3 targets:
+203 F?, 209 F, 211 F, 212 F, 215 F, 221 M, 225 F, 226 F, 227 F
+But without knowing the number of trials per datapoint, this is highly questionable!!
+
+```{r}
+#| echo: false
+
+# Prepare gender annotation data: one row per subject with gender symbol and upper-right coordinates
+gender_annotatn <- Roudaia_data |> filter(ageGroup == "older", speed < 0.8) |>
+  group_by(subj) %>%
+  summarise(
+    genderSymbol = first(genderSymbol),
+    x = max(speed, na.rm = TRUE),
+    y = max(correct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+gg <- ggplot(Roudaia_data |> filter(ageGroup == "older", speed < 0.8),
+             aes(x = speed, y = correct, linetype = factor(numObjects),
+                 color = factor(numTargets))) +
+  stat_summary(fun = mean, geom = "point", position = position_jitter(width = 0.02)) +
+  facet_wrap(subj ~ .) +
+ geom_text(
+    data = gender_annotatn,
+    aes(x = x, y = y, label = genderSymbol),
+    inherit.aes = FALSE,
+    hjust = 1, vjust = 1, size = 6
+  ) +
+  labs(x = "Speed (revolutions per second)",
+       y = "Correct",
+       title = "Roudaia older") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+#Show floor with lines
+gg<- gg + geom_hline( aes(yintercept = 1/numObjects),
+                      colour = "purple", alpha=0.2 ) +
+    geom_hline(yintercept=0.75, alpha=0.2)
+
+show(gg)
+```
