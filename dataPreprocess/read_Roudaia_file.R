@@ -3,10 +3,6 @@ library(here) #To find path of home directory of repo
 library(tidyverse)
 library(brms)
 
-
-set.seed(996) #ensures reproducibility for testing
-
-
 Roudaia_data_dir<- here("..","roudaia_faubert_data","dat_csvs")
 
 #"There is a handy csv that has all of them (sub-ALL_task-motc.csv)"
@@ -112,5 +108,6 @@ gg<- gg + geom_hline( aes(yintercept = 1/objPerRing),
                       colour = "purple", alpha=0.2 )
 show(gg)
 
-#Fit psychometric curves, but do that in a separate file
-
+destination_fname<- "Roudaia_preprocessed.tsv"
+destination<- here("dataPreprocess",destination_fname)
+readr::write_tsv(Roudaia_data, file = destination)
